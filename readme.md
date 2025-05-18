@@ -2,110 +2,89 @@
 
 # 🎮 PyPPG Mod Manager
 
-**Bridging the gap between non-steam People Playground and steam workshop.**
+**Steam Workshop mod installer for non-steam People Playground.**
 
 [![Downloads](https://img.shields.io/github/downloads/NotClavilux/PyPPGModManager/total.svg)](https://github.com/NotClavilux/PyPPGModManager/releases)
 [![Version](https://img.shields.io/github/v/release/NotClavilux/PyPPGModManager)](https://github.com/NotClavilux/PyPPGModManager/releases)
 [![License](https://img.shields.io/github/license/NotClavilux/PyPPGModManager)](https://github.com/NotClavilux/PyPPGModManager/blob/main/LICENSE)
 
-[Download Latest Release](https://github.com/NotClavilux/PyPPGModManager/releases) • [Features](#features) • [Setup](#setup) • [Usage](#usage) • [Roadmap](#roadmap) • [Contributing](#contributing)
+[Download](https://github.com/NotClavilux/PyPPGModManager/releases) • [Features](#what-it-does) • [Installation](#installing) • [Usage](#usage)
 
 ![image](https://github.com/user-attachments/assets/a3aff44b-f1fe-4628-bb74-4b1c96165186)
 
-![image](https://github.com/user-attachments/assets/c9a8cf33-28aa-44a6-aaaa-44955e6fe21d)
-
 </div>
 
----
-
-## Overview
-
-**PyPPG Mod Manager** is a tool designed to simplify managing Steam Workshop mods for *People Playground*. It combines a Python backend with a browser userscript to integrate mod management directly into your Steam Workshop browsing experience. It's built to be fast, minimal, and effective.
-
-> **Note:** This tool is intended for users who legally own People Playground. While it can be particularly helpful for non-Steam versions, it works for any version by managing mods in a local directory.
+**PyPPG Mod Manager** is a bridge between the Steam Workshop and a non-steam installation of _People Playground_ that allows you to install Steam Workshop mods to the game. Its written in python and has a browser userscript to allow mod management for the game from Steam Workshop itself.
 
 ---
 
-## Features
+## What it does
 
--   **One-Click Steam Workshop Installs:** Install mods directly from their Steam Workshop pages.
--   **Browser Integration:** A Tampermonkey userscript adds Install/Update/Delete/Enable/Disable buttons to People Playground mod pages.
--   **Mod Updates:** Check for updates for individual mods or all installed mods.
--   **Enable/Disable Mods:** Easily toggle mods on or off without having to open people playground.
--   **Clean Setup:** Configure your game and SteamCMD paths once.
--   **Lightweight & Focused:** No unnecessary bloat, just core mod management.
--   **Cross-Platform:** Python backend works on Windows, Linux, and macOS.
+- **Simple Mod Installation:** Install mods directly from their Steam Workshop pages with a single click.
+- **Browser Integration:** A userscript allows you to manage mods directly from their Steam Workshop mod page.
+- **Checks Updates:** For individual mods or all installed mods.
+- **Enable/Disable Any Mod:** Easily toggle mods on or off without having to open people playground.
+- **Lightweight:** No unnecessary bloat, just mod management.
+- **Cross-Platform:** Works on Windows, Linux, and macOS.
 
----
-
-## Setup
+## Installing
 
 ### Prerequisites
 
-1.  **Python:** Version 3.7+ is recommended.
-2.  **Tampermonkey:** A browser extension for managing userscripts (available for Chrome, Firefox, Edge, Opera, etc.).
-3.  **People Playground:** The game itself.
+1. **Python:** Version 3.7+ is recommended.
+2. **Userscript Manager:** Like [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
+3. **People Playground:** You need the game, obviously.
 
-### 1. Python Backend
+### 1. Python Server
 
-1.  **Download:** Get the latest `ppg.py` script from the [Releases page](https://github.com/NotClavilux/PyPPGModManager/releases) or clone the repository.
-2.  **Install Dependencies:** Open a terminal or command prompt, navigate to the folder where you saved `ppg.py`, and run:
-    ```bash
-    pip install requests
-    ```
-3.  **Run Backend:** Execute the script:
-    ```bash
-    python ppg.py
-    ```
-    *   On the first run, you'll be guided through a setup to specify your People Playground game directory and a location for SteamCMD (a tool for downloading workshop items).
-    *   The backend server will start on `http://localhost:8000`. Keep this terminal window running while using the mod manager.
+1. Download the `ppg.py` script from the [Releases page](https://github.com/NotClavilux/PyPPGModManager/releases) or clone this repository.
+2. Open a terminal or command prompt and run:
 
-### 2. Browser Userscript (Tampermonkey)
+   ```bash
+   pip install requests
+   ```
 
-1.  **Install Tampermonkey:** Add the Tampermonkey extension to your preferred browser if you haven't already.
-2.  **Create New Script:** Open the Tampermonkey dashboard and click "Create a new script."
-3.  **Add PyPPG Script:**
-    *   Delete any default content in the new script editor.
-    *   Copy the entire content of the PyPPG Mod Manager userscript (`pyppg_userscript.js` from the release or repository).
-    *   Paste it into the Tampermonkey editor.
-    *   Save the script (usually File > Save or Ctrl+S). Tampermonkey will automatically enable it.
+### 2. Userscript
 
----
+1. Install one of [Tampermonkey](https://www.tampermonkey.net/), [Violentmonkey](https://violentmonkey.github.io/), etc (Userscript Manager).
+2. Install the userscript from [here](https://raw.githubusercontent.com/NotClavilux/PyPPGModManager/refs/heads/main/ppg.user.js).
 
 ## Usage
 
-1.  **Start Backend:** Ensure the `ppg.py` Python script is running.
-2.  **Open Steam Workshop:** Navigate to a People Playground mod page on the Steam Workshop.
-3.  **Use Integrated Buttons:** The userscript will add a set of buttons:
-    *   **Install to PyPPG:** If the mod isn't installed.
-    *   **Update Mod:** If an update is available.
-    *   **Delete Mod / Delete Mod (Disabled):** To remove the mod.
-    *   **Enable Mod / Disable Mod:** To toggle the mod's active state.
-4.  **Global Update Check:** A "Check All PyPPG Updates" button will appear (usually bottom-right) on workshop pages to scan all your mods.
-5.  **Launch Game:** Your managed mods should now be active (if enabled) in People Playground.
+> When running for the first time, you will be prompted for the People Playground game directory and where to save the helper SteamCMD tool.
 
----
+1. **Python script:** Make sure that the `ppg.py` Python script is running.
+   To run the script, open a command prompt and navigate to where you saved `ppg.py` and run:
 
-## Roadmap (Future Enhancements)
+   ```bash
+   python ppg.py
+   ```
 
-*   **Dedicated Mod Manager UI:** A web interface or simple desktop app for viewing and managing all installed mods, changing settings, etc., without needing to be on a Steam page.
-*   **Batch Operations:** Allow installing, updating, or deleting multiple mods at once (e.g., from a Steam Collection).
-*   **Mod Profiles:** Create and switch between different sets of enabled mods easily.
-*   **Other games:** Support for more games?
-*   **Settings Management:** An easier way to update game/SteamCMD paths after initial setup.
-*   **Backup & Restore:** Option to backup mod lists or configurations.
+2. **Open Steam Workshop:** Open the People Playground mod page on the Steam Workshop.
+3. The userscript will add a set of buttons:
+   - **Install to PyPPG:** If the mod isn't installed locally.
+   - **Update Mod** (if an update is available)
+   - **Delete Mod**
+   - **Enable/Disable Mod:** To toggle the mod's active state.
+4. **Check for Updates:** (on bottom-right) scans all your mods for updates.
 
----
+Now you can launch the game and all your enabled mods should be active in People Playground. You only need to run the python script when you want to install mods.
+
+## Roadmap
+
+- **Dedicated Mod Manager UI:** A dedicated web interface or simple desktop app for managing your mods, without needing to open a Steam page.
+- **Batch Operations:** Install, update, or delete multiple mods at once (e.g., from a Steam Collection).
+- **Mod Profiles:** Create and switch between different sets of mods.
+- **Settings Management:** Better way to update game/SteamCMD paths after initial setup.
+- **Backup:** Option to backup mod lists.
 
 ## Contributing
 
 Contributions are welcome! Whether it's reporting a bug, suggesting a feature, or submitting a pull request, your help is appreciated.
 
--   **Report Issues:** Open an issue to describe any bugs or problems you encounter.
--   **Suggest Features:** Share your ideas for new functionality or improvements.
--   **Pull Requests:** Feel free to fork the repository and submit PRs for bug fixes or new features.
-
----
+- **Report Issues:** Open an issue to describe any bugs or problems you encounter.
+- **Suggest Features:** Share your ideas for new functionality or improvements.
+- **Pull Requests:** Feel free to fork the repository and submit PRs for bug fixes or new features.
 
 ## License
 
@@ -115,9 +94,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 <div align="center">
 
-*"Modding should be effortless."*
+_"Modding should be effortless."_
 **Made with ❤️ by NotClavilux**
-
-**Thanks to ChatGPT for helping with the readme.**
 
 </div>
