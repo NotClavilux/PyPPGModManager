@@ -62,11 +62,11 @@
 
 2. **Open Steam Workshop:** Open the People Playground mod page on the Steam Workshop.
 3. The userscript will add a set of buttons:
-   - **Install to PyPPG:** If the mod isn't installed locally.
-   - **Update Mod** (if an update is available)
+   - **Install to PyPPG** (if the mod isn't installed)
+   - **Update Mod** (if available)
    - **Delete Mod**
-   - **Enable/Disable Mod:** To toggle the mod's active state.
-4. **Check for Updates:** (on bottom-right) scans all your mods for updates.
+   - **Enable/Disable Mod**
+4. **Check for Updates:** (on bottom-right) this button scans all your mods for updates.
 
 Now you can launch the game and all your enabled mods should be active in People Playground. You only need to run the python script when you want to install mods.
 
@@ -82,9 +82,9 @@ Now you can launch the game and all your enabled mods should be active in People
 
 Contributions are welcome! Whether it's reporting a bug, suggesting a feature, or submitting a pull request, your help is appreciated.
 
-- **Report Issues:** Open an issue to describe any bugs or problems you encounter.
-- **Suggest Features:** Share your ideas for new functionality or improvements.
-- **Pull Requests:** Feel free to fork the repository and submit PRs for bug fixes or new features.
+- Open an issue and describe any bugs or problems you encounter.
+- Share your ideas for new functionality or improvements.
+- Feel free to fork the repository and submit PRs for bug fixes or new features.
 
 ## License
 
