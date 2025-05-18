@@ -10,6 +10,10 @@
 
 [Download Latest Release](https://github.com/NotClavilux/PyPPGModManager/releases) • [Features](#features) • [Setup](#setup) • [Usage](#usage) • [Roadmap](#roadmap) • [Contributing](#contributing)
 
+![image](https://github.com/user-attachments/assets/a3aff44b-f1fe-4628-bb74-4b1c96165186)
+
+![image](https://github.com/user-attachments/assets/c9a8cf33-28aa-44a6-aaaa-44955e6fe21d)
+
 </div>
 
 ---
@@ -113,6 +117,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 *"Modding should be effortless."*
 **Made with ❤️ by NotClavilux**
+
 **Thanks to ChatGPT for helping with the readme.**
 
 </div>
