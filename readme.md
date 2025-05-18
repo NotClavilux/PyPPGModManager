@@ -86,6 +86,11 @@ Contributions are welcome! Whether it's reporting a bug, suggesting a feature, o
 - Share your ideas for new functionality or improvements.
 - Feel free to fork the repository and submit PRs for bug fixes or new features.
 
+## Disclaimer
+
+This project is meant for users who legitimately own People Playground but aren't using the Steam version.
+We do not support piracy. Please support the devs and buy the game legally.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/NotClavilux/PyPPGModManager/blob/main/LICENSE) file for details.
