@@ -30,6 +30,7 @@ class ModManagerConfig:
     def __init__(self):
         self.ppg_dir = ""
         self.mods_dir = ""
+        self.contraptions_dir = ""
         self.steamcmd_dir = ""
         self.steamcmd_exe_name = "steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh"
         self.config_file_path = self._get_config_path()
@@ -78,6 +79,9 @@ class ModManagerConfig:
 
         self.mods_dir = os.path.join(self.ppg_dir, "Mods")
         os.makedirs(self.mods_dir, exist_ok=True)
+
+        self.contraptions_dir = os.path.join(self.ppg_dir, "Contraptions")
+        os.makedirs(self.contraptions_dir, exist_ok=True)
 
 
         default_dir = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'PyPPGModManager', 'SteamCMD')
@@ -157,10 +161,15 @@ def get_mod_details_from_steam(mod_id):
         data = response.json()
         if data['response']['result'] == 1:
             details = data['response']['publishedfiledetails'][0]
+            tags = []
+            if 'tags' in details:
+                tags = [tag.get('tag', '').strip() for tag in details['tags']]
+            
             return {
                 "mod_id": details['publishedfileid'],
                 "time_updated": details.get('time_updated', 0),
-                "title": details.get('title', f'Mod {mod_id}')
+                "title": details.get('title', f'Mod {mod_id}'),
+                "tags": tags
             }
     except Exception as e:
         logging.error(f"Error getting mod details: {e}")
@@ -223,23 +232,26 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _find_mod_path(self, mod_id):
-        if not os.path.isdir(config.mods_dir):
-            return None, None
-
-        for folder_name in os.listdir(config.mods_dir):
-            mod_path = os.path.join(config.mods_dir, folder_name)
-            if not os.path.isdir(mod_path):
+        directories = [config.mods_dir, config.contraptions_dir]
+        
+        for directory in directories:
+            if not os.path.isdir(directory):
                 continue
+                
+            for folder_name in os.listdir(directory):
+                mod_path = os.path.join(directory, folder_name)
+                if not os.path.isdir(mod_path):
+                    continue
 
-            info_file = os.path.join(mod_path, MOD_INFO_FILE)
-            if os.path.isfile(info_file):
-                try:
-                    with open(info_file, 'r') as f:
-                        info = json.load(f)
-                    if str(info.get("mod_id")) == str(mod_id):
-                        return mod_path, info
-                except:
-                    pass
+                info_file = os.path.join(mod_path, MOD_INFO_FILE)
+                if os.path.isfile(info_file):
+                    try:
+                        with open(info_file, 'r') as f:
+                            info = json.load(f)
+                        if str(info.get("mod_id")) == str(mod_id):
+                            return mod_path, info
+                    except:
+                        pass
 
         return None, None
 
@@ -283,7 +295,8 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
                         "mod_id": mod_id,
                         "installed": True,
                         "enabled": mod_info.get("enabled", True),
-                        "title": mod_info.get("title", "Unknown")
+                        "title": mod_info.get("title", "Unknown"),
+                        "is_contraption": mod_info.get("is_contraption", False)
                     })
                 else:
                     self._send_response(200, {"mod_id": mod_id, "installed": False})
@@ -333,6 +346,7 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
             self._send_response(500, {"error": f"Server error: {e}"})
 
     def _install_mod(self, mod_id):
+        temp_dir = None
         success, download_path, message = self._download_with_steamcmd(mod_id)
 
         if not success:
@@ -345,10 +359,18 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
 
         steam_details = get_mod_details_from_steam(mod_id)
         title = steam_details.get("title", f"Mod {mod_id}") if steam_details else f"Mod {mod_id}"
-
+        
+        is_contraption = False
+        if steam_details and "tags" in steam_details:
+            is_contraption = any(tag.lower() == "contraptions" for tag in steam_details["tags"])
+        
         safe_title = sanitize_filename(title)
         mod_dirname = f"{safe_title} [{mod_id}]"
-        mod_final_path = os.path.join(config.mods_dir, mod_dirname)
+        
+        if is_contraption:
+            mod_final_path = os.path.join(config.contraptions_dir, mod_dirname)
+        else:
+            mod_final_path = os.path.join(config.mods_dir, mod_dirname)
 
         old_path, _ = self._find_mod_path(mod_id)
         if old_path and old_path != mod_final_path:
@@ -362,7 +384,7 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
         except Exception as e:
             return False, f"Failed to install mod: {e}"
 
-        if temp_dir and os.path.exists(temp_dir):
+        if temp_dir is not None and os.path.exists(temp_dir):
             try:
                 shutil.rmtree(temp_dir)
             except:
@@ -374,11 +396,15 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
             "folder_name": mod_dirname,
             "steam_time_updated": steam_details.get("time_updated", 0) if steam_details else 0,
             "local_install_time": int(time.time()),
-            "enabled": True
+            "enabled": True,
+            "is_contraption": is_contraption
         }
         self._write_mod_info(mod_final_path, mod_info)
 
-        return True, f"Mod '{title}' installed successfully"
+        if is_contraption:
+            return True, f"Contraption '{title}' installed successfully"
+        else:
+            return True, f"Mod '{title}' installed successfully"
 
     def _download_with_steamcmd(self, mod_id):
         steamcmd_exe = os.path.join(config.steamcmd_dir, config.steamcmd_exe_name)
@@ -436,7 +462,8 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
                 "title": local_info.get("title"),
                 "updateAvailable": False,
                 "error": "Could not fetch Steam details",
-                "enabled": local_info.get("enabled", True)
+                "enabled": local_info.get("enabled", True),
+                "is_contraption": local_info.get("is_contraption", False)
             }
 
         local_time = local_info.get("steam_time_updated", 0)
@@ -450,22 +477,26 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
             "updateAvailable": update_available,
             "localVersionTime": local_time,
             "steamVersionTime": steam_time,
-            "enabled": local_info.get("enabled", True)
+            "enabled": local_info.get("enabled", True),
+            "is_contraption": local_info.get("is_contraption", False)
         }
 
     def _check_all_mod_updates(self):
         results = []
-        if not os.path.isdir(config.mods_dir):
-            return results
-
-        for folder_name in os.listdir(config.mods_dir):
-            mod_path = os.path.join(config.mods_dir, folder_name)
-            if not os.path.isdir(mod_path):
+        directories = [config.mods_dir, config.contraptions_dir]
+        
+        for directory in directories:
+            if not os.path.isdir(directory):
                 continue
+                
+            for folder_name in os.listdir(directory):
+                mod_path = os.path.join(directory, folder_name)
+                if not os.path.isdir(mod_path):
+                    continue
 
-            info = self._read_mod_info(mod_path)
-            if info and "mod_id" in info:
-                results.append(self._check_mod_update(info["mod_id"]))
+                info = self._read_mod_info(mod_path)
+                if info and "mod_id" in info:
+                    results.append(self._check_mod_update(info["mod_id"]))
 
         return results
 
