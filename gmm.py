@@ -10,12 +10,34 @@ import logging
 import tempfile
 import zipfile
 import requests
+import tkinter as tk
+from tkinter import filedialog
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from logging.handlers import RotatingFileHandler
 
-PPG_APP_ID = "1118200"
+GAME_CONFIGS = {
+    "ppg": {
+        "name": "People Playground",
+        "app_id": "1118200",
+        "mods_folder": "Mods",
+        "exe_names": {
+            "windows": "People Playground.exe",
+        }
+    },
+    "pz": {
+        "name": "Project Zomboid",
+        "app_id": "108600",
+        "mods_folder": "mods",
+        "exe_names": {
+            "windows": "ProjectZomboid.exe",
+            "linux": "ProjectZomboid",
+        }
+    }
+}
+
 MOD_INFO_FILE = "modinfo.json"
+DISABLED_MODS_FOLDER = "disabled_mods"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,9 +50,8 @@ logging.basicConfig(
 
 class ModManagerConfig:
     def __init__(self):
-        self.ppg_dir = ""
-        self.mods_dir = ""
-        self.contraptions_dir = ""
+        self.games = {}
+        self.active_game = None
         self.steamcmd_dir = ""
         self.steamcmd_exe_name = "steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh"
         self.config_file_path = self._get_config_path()
@@ -38,9 +59,9 @@ class ModManagerConfig:
 
     def _get_config_path(self):
         if platform.system() == "Windows":
-            config_dir = os.path.join(os.getenv('APPDATA', os.path.expanduser("~")), 'PyPPGModManager')
+            config_dir = os.path.join(os.getenv('APPDATA', os.path.expanduser("~")), 'GOGModManager')
         else:
-            config_dir = os.path.join(os.path.expanduser('~'), '.config', 'PyPPGModManager')
+            config_dir = os.path.join(os.path.expanduser('~'), '.config', 'GOGModManager')
 
         os.makedirs(config_dir, exist_ok=True)
         return os.path.join(config_dir, 'config.json')
@@ -51,13 +72,28 @@ class ModManagerConfig:
                 with open(self.config_file_path, 'r') as f:
                     data = json.load(f)
 
-                self.ppg_dir = data.get("ppg_dir", "")
+                self.games = data.get("games", {})
+                self.active_game = data.get("active_game")
                 self.steamcmd_dir = data.get("steamcmd_dir", "")
 
-                if (self.ppg_dir and os.path.isdir(self.ppg_dir) and
+                if (self.games and self.active_game in self.games and
                     self.steamcmd_dir and os.path.isfile(os.path.join(self.steamcmd_dir, self.steamcmd_exe_name))):
-                    self.mods_dir = os.path.join(self.ppg_dir, "Mods")
-                    os.makedirs(self.mods_dir, exist_ok=True)
+                    for game_key, game_data in self.games.items():
+                        game_dir = game_data.get("game_dir")
+                        if game_dir and os.path.isdir(game_dir):
+                            game_config = GAME_CONFIGS.get(game_key)
+                            if game_config:
+                                mods_folder = game_config["mods_folder"]
+                                mods_dir = os.path.join(game_dir, mods_folder)
+                                os.makedirs(mods_dir, exist_ok=True)
+
+                                disabled_mods_dir = os.path.join(game_dir, DISABLED_MODS_FOLDER)
+                                os.makedirs(disabled_mods_dir, exist_ok=True)
+
+                                if game_key == "ppg":
+                                    contraptions_dir = os.path.join(game_dir, "Contraptions")
+                                    os.makedirs(contraptions_dir, exist_ok=True)
+
                     logging.info(f"Config loaded successfully")
                     return
             except Exception as e:
@@ -67,28 +103,68 @@ class ModManagerConfig:
 
     def setup_new_config(self):
         logging.info("Setting up new configuration")
+        print("Available games:")
+        for key, game in GAME_CONFIGS.items():
+            print(f"- {key}: {game['name']}")
 
+        game_key = ""
+        while game_key not in GAME_CONFIGS:
+            game_key = input("Select game to configure (e.g., ppg, pz): ").strip().lower()
+            if game_key not in GAME_CONFIGS:
+                print(f"Invalid game selection. Please choose from: {', '.join(GAME_CONFIGS.keys())}")
+
+        game_config = GAME_CONFIGS[game_key]
+        system = platform.system().lower()
+        exe_name = game_config["exe_names"].get(system, "")
+
+        game_dir = ""
+        
+        print(f"Please select your {game_config['name']} directory in the file dialog...")
+        
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        
         while True:
-            self.ppg_dir = input(f"People Playground directory: ").strip()
-            ppg_exe_win = os.path.join(self.ppg_dir, "People Playground.exe")
-            ppg_exe_linux = os.path.join(self.ppg_dir, "People Playground.x86_64")
-
-            if os.path.isdir(self.ppg_dir) and (os.path.exists(ppg_exe_win) or os.path.exists(ppg_exe_linux)):
+            game_dir = filedialog.askdirectory(title=f"Select {game_config['name']} Directory")
+            
+            if not game_dir:
+                print("No directory selected. Please try again.")
+                continue
+                
+            game_exe = os.path.join(game_dir, exe_name)
+            
+            if os.path.isdir(game_dir) and os.path.exists(game_exe):
                 break
-            print("Invalid PPG directory. Please try again.")
+            else:
+                print(f"Invalid {game_config['name']} directory. Please try again.")
 
-        self.mods_dir = os.path.join(self.ppg_dir, "Mods")
-        os.makedirs(self.mods_dir, exist_ok=True)
+        if not self.games:
+            self.games = {}
 
-        self.contraptions_dir = os.path.join(self.ppg_dir, "Contraptions")
-        os.makedirs(self.contraptions_dir, exist_ok=True)
+        self.games[game_key] = {
+            "game_dir": game_dir,
+            "app_id": game_config["app_id"]
+        }
 
+        self.active_game = game_key
 
-        default_dir = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'PyPPGModManager', 'SteamCMD')
-        steamcmd_input = input(f"SteamCMD directory (default: {default_dir}): ").strip()
-        self.steamcmd_dir = steamcmd_input if steamcmd_input else default_dir
+        mods_dir = os.path.join(game_dir, game_config["mods_folder"])
+        os.makedirs(mods_dir, exist_ok=True)
+
+        disabled_mods_dir = os.path.join(game_dir, DISABLED_MODS_FOLDER)
+        os.makedirs(disabled_mods_dir, exist_ok=True)
+
+        if game_key == "ppg":
+            contraptions_dir = os.path.join(game_dir, "Contraptions")
+            os.makedirs(contraptions_dir, exist_ok=True)
+
+        default_dir = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), 'GOGModManager', 'SteamCMD')
+        print(f"Please select SteamCMD directory (or cancel to use default: {default_dir})")
+        
+        steamcmd_dir = filedialog.askdirectory(title=f"Select SteamCMD Directory (Cancel for default)")
+        self.steamcmd_dir = steamcmd_dir if steamcmd_dir else default_dir
         os.makedirs(self.steamcmd_dir, exist_ok=True)
-
 
         steamcmd_path = os.path.join(self.steamcmd_dir, self.steamcmd_exe_name)
         if not os.path.isfile(steamcmd_path):
@@ -98,11 +174,57 @@ class ModManagerConfig:
                 print("SteamCMD is required. Exiting.")
                 sys.exit(1)
 
-
         self.save_config()
 
+    def get_game_dir(self, game_key=None):
+        if not game_key:
+            game_key = self.active_game
+
+        if game_key in self.games:
+            return self.games[game_key].get("game_dir", "")
+        return ""
+
+    def get_mods_dir(self, game_key=None):
+        if not game_key:
+            game_key = self.active_game
+
+        if game_key in self.games and game_key in GAME_CONFIGS:
+            game_dir = self.games[game_key].get("game_dir", "")
+            mods_folder = GAME_CONFIGS[game_key]["mods_folder"]
+            return os.path.join(game_dir, mods_folder)
+        return ""
+
+    def get_disabled_mods_dir(self, game_key=None):
+        if not game_key:
+            game_key = self.active_game
+
+        if game_key in self.games:
+            game_dir = self.games[game_key].get("game_dir", "")
+            return os.path.join(game_dir, DISABLED_MODS_FOLDER)
+        return ""
+
+    def get_contraptions_dir(self):
+        if self.active_game == "ppg":
+            game_dir = self.get_game_dir()
+            return os.path.join(game_dir, "Contraptions")
+        return ""
+
+    def get_app_id(self, game_key=None):
+        if not game_key:
+            game_key = self.active_game
+
+        if game_key in self.games:
+            return self.games[game_key].get("app_id", "")
+        elif game_key in GAME_CONFIGS:
+            return GAME_CONFIGS[game_key]["app_id"]
+        return ""
+
     def save_config(self):
-        config_data = {"ppg_dir": self.ppg_dir, "steamcmd_dir": self.steamcmd_dir}
+        config_data = {
+            "games": self.games,
+            "active_game": self.active_game,
+            "steamcmd_dir": self.steamcmd_dir
+        }
         try:
             with open(self.config_file_path, 'w') as f:
                 json.dump(config_data, f, indent=4)
@@ -164,7 +286,7 @@ def get_mod_details_from_steam(mod_id):
             tags = []
             if 'tags' in details:
                 tags = [tag.get('tag', '').strip() for tag in details['tags']]
-            
+
             return {
                 "mod_id": details['publishedfileid'],
                 "time_updated": details.get('time_updated', 0),
@@ -193,7 +315,7 @@ def download_mod_via_ggnetwork(mod_id, target_dir):
 
         if data.get("result") == 1 and "url" in data:
             cdn_url = data["url"]
-            temp_zip = os.path.join(tempfile.gettempdir(), f"pyppg_{mod_id}.zip")
+            temp_zip = os.path.join(tempfile.gettempdir(), f"gmm_{mod_id}.zip")
 
             with requests.get(cdn_url, stream=True) as r:
                 with open(temp_zip, 'wb') as f:
@@ -232,12 +354,22 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _find_mod_path(self, mod_id):
-        directories = [config.mods_dir, config.contraptions_dir]
-        
+        mods_dir = config.get_mods_dir()
+        disabled_mods_dir = config.get_disabled_mods_dir()
+        directories = [mods_dir]
+
+        if config.active_game == "ppg":
+            contraptions_dir = config.get_contraptions_dir()
+            if contraptions_dir:
+                directories.append(contraptions_dir)
+
+        if disabled_mods_dir:
+            directories.append(disabled_mods_dir)
+
         for directory in directories:
             if not os.path.isdir(directory):
                 continue
-                
+
             for folder_name in os.listdir(directory):
                 mod_path = os.path.join(directory, folder_name)
                 if not os.path.isdir(mod_path):
@@ -249,6 +381,8 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
                         with open(info_file, 'r') as f:
                             info = json.load(f)
                         if str(info.get("mod_id")) == str(mod_id):
+                            if directory == disabled_mods_dir:
+                                info["enabled"] = False
                             return mod_path, info
                     except:
                         pass
@@ -351,7 +485,7 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
 
         if not success:
             logging.info(f"SteamCMD failed, trying GGNetwork")
-            temp_dir = tempfile.mkdtemp(prefix=f"pyppg_mod_{mod_id}_")
+            temp_dir = tempfile.mkdtemp(prefix=f"gmm_mod_{mod_id}_")
             success, download_path, message = download_mod_via_ggnetwork(mod_id, temp_dir)
 
         if not success or not download_path:
@@ -359,30 +493,84 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
 
         steam_details = get_mod_details_from_steam(mod_id)
         title = steam_details.get("title", f"Mod {mod_id}") if steam_details else f"Mod {mod_id}"
-        
+
         is_contraption = False
-        if steam_details and "tags" in steam_details:
+        if config.active_game == "ppg" and steam_details and "tags" in steam_details:
             is_contraption = any(tag.lower() == "contraptions" for tag in steam_details["tags"])
-        
+
         safe_title = sanitize_filename(title)
         mod_dirname = f"{safe_title} [{mod_id}]"
         
-        if is_contraption:
-            mod_final_path = os.path.join(config.contraptions_dir, mod_dirname)
+        mod_final_path = None
+        game_dir = config.get_game_dir()
+        
+        if config.active_game == "pz":
+            mod_final_path = game_dir
+            
+            old_path, old_info = self._find_mod_path(mod_id)
+            if old_path:
+                try:
+                    if old_info and "folder_name" in old_info:
+                        old_mod_path = os.path.join(config.get_mods_dir(), old_info["folder_name"])
+                        if os.path.exists(old_mod_path):
+                            shutil.rmtree(old_mod_path)
+                except Exception as e:
+                    logging.error(f"Error removing old mod: {e}")
+            
+            try:
+                for item in os.listdir(download_path):
+                    src_path = os.path.join(download_path, item)
+                    if os.path.isdir(src_path) and item.lower() == "mods":
+                        for mod_folder in os.listdir(src_path):
+                            mod_src = os.path.join(src_path, mod_folder)
+                            mod_dest = os.path.join(game_dir, "mods", mod_folder)
+                            if os.path.exists(mod_dest):
+                                shutil.rmtree(mod_dest)
+                            shutil.copytree(mod_src, mod_dest)
+                            
+                            mod_info_path = os.path.join(mod_dest, MOD_INFO_FILE)
+                            mod_info = {
+                                "mod_id": mod_id,
+                                "title": title,
+                                "folder_name": mod_folder,
+                                "steam_time_updated": steam_details.get("time_updated", 0) if steam_details else 0,
+                                "local_install_time": int(time.time()),
+                                "enabled": True,
+                                "is_contraption": False
+                            }
+                            with open(mod_info_path, 'w') as f:
+                                json.dump(mod_info, f, indent=4)
+            except Exception as e:
+                return False, f"Failed to install Project Zomboid mod: {e}"
+                
         else:
-            mod_final_path = os.path.join(config.mods_dir, mod_dirname)
+            if is_contraption and config.active_game == "ppg":
+                mod_final_path = os.path.join(config.get_contraptions_dir(), mod_dirname)
+            else:
+                mod_final_path = os.path.join(config.get_mods_dir(), mod_dirname)
 
-        old_path, _ = self._find_mod_path(mod_id)
-        if old_path and old_path != mod_final_path:
-            shutil.rmtree(old_path)
+            old_path, _ = self._find_mod_path(mod_id)
+            if old_path and old_path != mod_final_path:
+                shutil.rmtree(old_path)
 
-        if os.path.exists(mod_final_path):
-            shutil.rmtree(mod_final_path)
+            if os.path.exists(mod_final_path):
+                shutil.rmtree(mod_final_path)
 
-        try:
-            shutil.move(download_path, mod_final_path)
-        except Exception as e:
-            return False, f"Failed to install mod: {e}"
+            try:
+                shutil.move(download_path, mod_final_path)
+            except Exception as e:
+                return False, f"Failed to install mod: {e}"
+                
+            mod_info = {
+                "mod_id": mod_id,
+                "title": title,
+                "folder_name": mod_dirname,
+                "steam_time_updated": steam_details.get("time_updated", 0) if steam_details else 0,
+                "local_install_time": int(time.time()),
+                "enabled": True,
+                "is_contraption": is_contraption
+            }
+            self._write_mod_info(mod_final_path, mod_info)
 
         if temp_dir is not None and os.path.exists(temp_dir):
             try:
@@ -390,18 +578,9 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
             except:
                 pass
 
-        mod_info = {
-            "mod_id": mod_id,
-            "title": title,
-            "folder_name": mod_dirname,
-            "steam_time_updated": steam_details.get("time_updated", 0) if steam_details else 0,
-            "local_install_time": int(time.time()),
-            "enabled": True,
-            "is_contraption": is_contraption
-        }
-        self._write_mod_info(mod_final_path, mod_info)
-
-        if is_contraption:
+        if config.active_game == "pz":
+            return True, f"Project Zomboid mod '{title}' installed successfully"
+        elif is_contraption and config.active_game == "ppg":
             return True, f"Contraption '{title}' installed successfully"
         else:
             return True, f"Mod '{title}' installed successfully"
@@ -414,7 +593,11 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
         download_dir = os.path.join(config.steamcmd_dir, "Downloads")
         os.makedirs(download_dir, exist_ok=True)
 
-        expected_path = os.path.join(download_dir, "steamapps", "workshop", "content", PPG_APP_ID, mod_id)
+        app_id = config.get_app_id()
+        if not app_id:
+            return False, None, "No active game configured"
+
+        expected_path = os.path.join(download_dir, "steamapps", "workshop", "content", app_id, mod_id)
 
         if os.path.exists(expected_path):
             shutil.rmtree(expected_path)
@@ -423,7 +606,7 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
             steamcmd_exe,
             "+force_install_dir", download_dir,
             "+login", "anonymous",
-            "+workshop_download_item", PPG_APP_ID, mod_id, "validate",
+            "+workshop_download_item", app_id, mod_id, "validate",
             "+quit"
         ]
 
@@ -483,12 +666,23 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
 
     def _check_all_mod_updates(self):
         results = []
-        directories = [config.mods_dir, config.contraptions_dir]
-        
+
+        mods_dir = config.get_mods_dir()
+        disabled_mods_dir = config.get_disabled_mods_dir()
+        directories = [mods_dir]
+
+        if config.active_game == "ppg":
+            contraptions_dir = config.get_contraptions_dir()
+            if contraptions_dir:
+                directories.append(contraptions_dir)
+
+        if disabled_mods_dir:
+            directories.append(disabled_mods_dir)
+
         for directory in directories:
             if not os.path.isdir(directory):
                 continue
-                
+
             for folder_name in os.listdir(directory):
                 mod_path = os.path.join(directory, folder_name)
                 if not os.path.isdir(mod_path):
@@ -505,12 +699,63 @@ class ModManagerHTTPHandler(BaseHTTPRequestHandler):
         if not mod_path or not mod_info:
             return False, f"Mod {mod_id} not found"
 
-        mod_info["enabled"] = enable
-        if self._write_mod_info(mod_path, mod_info):
-            status = "enabled" if enable else "disabled"
-            return True, f"Mod '{mod_info.get('title', mod_id)}' is now {status}"
+        mods_dir = config.get_mods_dir()
+        disabled_mods_dir = config.get_disabled_mods_dir()
+        
+        if config.active_game == "pz":
+            folder_name = mod_info.get("folder_name")
+            if not folder_name:
+                return False, "Missing folder name in mod info"
+                
+            source_path = mod_path
+            if enable:
+                dest_path = os.path.join(mods_dir, folder_name)
+            else:
+                dest_path = os.path.join(disabled_mods_dir, folder_name)
+                
+            try:
+                if os.path.exists(dest_path):
+                    shutil.rmtree(dest_path)
+                    
+                shutil.copytree(source_path, dest_path)
+                
+                if not enable:
+                    shutil.rmtree(source_path)
+                
+                mod_info["enabled"] = enable
+                self._write_mod_info(dest_path, mod_info)
+                
+                status = "enabled" if enable else "disabled"
+                return True, f"Mod '{mod_info.get('title', mod_id)}' is now {status}"
+            except Exception as e:
+                logging.error(f"Error toggling Project Zomboid mod status: {e}")
+                return False, f"Failed to update mod status: {e}"
         else:
-            return False, f"Failed to update mod status"
+            is_contraption = mod_info.get("is_contraption", False)
+            if is_contraption and config.active_game == "ppg":
+                mods_dir = config.get_contraptions_dir()
+
+            source_dir = disabled_mods_dir if enable else mods_dir
+            dest_dir = mods_dir if enable else disabled_mods_dir
+
+            folder_name = mod_info.get("folder_name", os.path.basename(mod_path))
+
+            dest_path = os.path.join(dest_dir, folder_name)
+
+            try:
+                if os.path.exists(dest_path):
+                    shutil.rmtree(dest_path)
+
+                shutil.move(mod_path, dest_path)
+
+                mod_info["enabled"] = enable
+                self._write_mod_info(dest_path, mod_info)
+
+                status = "enabled" if enable else "disabled"
+                return True, f"Mod '{mod_info.get('title', mod_id)}' is now {status}"
+            except Exception as e:
+                logging.error(f"Error toggling mod status: {e}")
+                return False, f"Failed to update mod status: {e}"
 
 
 config = ModManagerConfig()
@@ -528,9 +773,22 @@ def run_server(port=8000):
         logging.info("Server shut down")
 
 if __name__ == "__main__":
-    if not os.path.isdir(config.ppg_dir) or \
-       not os.path.isfile(os.path.join(config.steamcmd_dir, config.steamcmd_exe_name)):
+    game_dir = config.get_game_dir()
+    steamcmd_path = os.path.join(config.steamcmd_dir, config.steamcmd_exe_name)
+
+    if not game_dir or not os.path.isdir(game_dir) or \
+       not config.steamcmd_dir or not os.path.isfile(steamcmd_path):
         logging.critical("Critical paths invalid. Exiting.")
         sys.exit(1)
 
+    for handler in logging.root.handlers[:]:
+        if isinstance(handler, logging.handlers.RotatingFileHandler):
+            logging.root.removeHandler(handler)
+
+    log_file = f"gog_mod_manager_{config.active_game}.log"
+    file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=2)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logging.root.addHandler(file_handler)
+
+    logging.info(f"Starting GOG Mod Manager for {GAME_CONFIGS[config.active_game]['name']}")
     run_server()

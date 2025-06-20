@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         PyPPG Mod Manager Helper
+// @name         GOG Mod Manager Helper
 // @namespace    http://tampermonkey.net/
-// @version      1.4.0
-// @description  Install, update, delete, and manage People Playground mods with PyPPG.
+// @version      2.0.0
+// @description  Install, update, delete, and manage mods for People Playground and Project Zomboid.
 // @author       notclavilux
 // @match        https://steamcommunity.com/sharedfiles/filedetails/?id=*
 // @match        https://steamcommunity.com/workshop/browse*appids=1118200*
 // @match        https://steamcommunity.com/app/1118200/workshop*
+// @match        https://steamcommunity.com/workshop/browse*appids=108600*
+// @match        https://steamcommunity.com/app/108600/workshop*
 // @connect      localhost
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -21,45 +23,45 @@
     const INSTALL_REQUEST_TIMEOUT = 300000;
 
     GM_addStyle(`
-        .pyppg-button-container { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-        .pyppg-action-button, .pyppg-global-button {
+        .gmm-button-container { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+        .gmm-action-button, .gmm-global-button {
             border: none; color: white; padding: 10px 20px; text-align: center;
             text-decoration: none; display: block; font-size: 14px;
             cursor: pointer; border-radius: 4px; width: 100%;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: background-color 0.2s ease, box-shadow 0.2s ease;
             box-sizing: border-box;
         }
-        .pyppg-action-button:hover, .pyppg-global-button:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
-        .pyppg-action-button.install { background-color: #4CAF50; }
-        .pyppg-action-button.install:hover { background-color: #45a049; }
-        .pyppg-action-button.delete { background-color: #f44336; }
-        .pyppg-action-button.delete:hover { background-color: #da190b; }
-        .pyppg-action-button.update { background-color: #007bff; }
-        .pyppg-action-button.update:hover { background-color: #0056b3; }
-        .pyppg-action-button.disable { background-color: #ffc107; color: black; }
-        .pyppg-action-button.disable:hover { background-color: #e0a800; }
-        .pyppg-action-button.enable { background-color: #28a745; }
-        .pyppg-action-button.enable:hover { background-color: #218838; }
-        .pyppg-action-button.loading, .pyppg-global-button.loading { background-color: #757575; cursor: not-allowed; }
-        .pyppg-global-button { position: fixed; bottom: 15px; right: 15px; z-index: 9999; width: auto; padding: 10px 15px; background-color: #343a40; }
-        .pyppg-global-button:hover { background-color: #23272b; }
-        .pyppg-notification {
+        .gmm-action-button:hover, .gmm-global-button:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+        .gmm-action-button.install { background-color: #4CAF50; }
+        .gmm-action-button.install:hover { background-color: #45a049; }
+        .gmm-action-button.delete { background-color: #f44336; }
+        .gmm-action-button.delete:hover { background-color: #da190b; }
+        .gmm-action-button.update { background-color: #007bff; }
+        .gmm-action-button.update:hover { background-color: #0056b3; }
+        .gmm-action-button.disable { background-color: #ffc107; color: black; }
+        .gmm-action-button.disable:hover { background-color: #e0a800; }
+        .gmm-action-button.enable { background-color: #28a745; }
+        .gmm-action-button.enable:hover { background-color: #218838; }
+        .gmm-action-button.loading, .gmm-global-button.loading { background-color: #757575; cursor: not-allowed; }
+        .gmm-global-button { position: fixed; bottom: 15px; right: 15px; z-index: 9999; width: auto; padding: 10px 15px; background-color: #343a40; }
+        .gmm-global-button:hover { background-color: #23272b; }
+        .gmm-notification {
             position: fixed; bottom: 15px; left: 15px; padding: 12px; border-radius: 4px;
             color: white; z-index: 10000; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             opacity: 0; transition: opacity 0.4s ease-in-out; max-width: 280px; word-wrap: break-word;
         }
-        .pyppg-notification.show { opacity: 1; }
-        .pyppg-notification.success { background-color: #28a745; }
-        .pyppg-notification.error { background-color: #dc3545; }
-        .pyppg-notification.info { background-color: #17a2b8; }
+        .gmm-notification.show { opacity: 1; }
+        .gmm-notification.success { background-color: #28a745; }
+        .gmm-notification.error { background-color: #dc3545; }
+        .gmm-notification.info { background-color: #17a2b8; }
     `);
 
     function showNotification(message, type = 'info', duration = 4000) {
-        let existingNotification = document.querySelector('.pyppg-notification');
+        let existingNotification = document.querySelector('.gmm-notification');
         if (existingNotification) existingNotification.remove();
 
         let notification = document.createElement('div');
-        notification.className = `pyppg-notification ${type}`;
+        notification.className = `gmm-notification ${type}`;
         notification.textContent = message;
         document.body.appendChild(notification);
         setTimeout(() => notification.classList.add('show'), 10);
@@ -94,70 +96,73 @@
         return new URLSearchParams(window.location.search).get('id');
     }
 
-    function isCurrentPagePPGWorkshopItem() {
+    function isSupportedGameWorkshopItem() {
         if (!window.location.href.includes("steamcommunity.com/sharedfiles/filedetails/")) return false;
         const appNameElement = document.querySelector('.apphub_AppName');
-        return appNameElement && appNameElement.textContent.trim() === 'People Playground';
+        if (!appNameElement) return false;
+
+        const appName = appNameElement.textContent.trim();
+        return appName === 'People Playground' || appName === 'Project Zomboid';
     }
 
-    async function updateModActionButtons(modId, pyppgButtonContainerDiv) {
-        if (!modId || !pyppgButtonContainerDiv) return;
-        pyppgButtonContainerDiv.innerHTML = '<button class="pyppg-action-button loading">Loading Status...</button>';
+    async function updateModActionButtons(modId, buttonContainerDiv) {
+        if (!modId || !buttonContainerDiv) return;
+        buttonContainerDiv.innerHTML = '<button class="gmm-action-button loading">Loading Status...</button>';
 
         try {
             const status = await backendRequest('/is_installed', { id: modId });
             const updateInfo = status.installed ? await backendRequest('/check_update', { id: modId }) : null;
 
-            pyppgButtonContainerDiv.innerHTML = '';
+            buttonContainerDiv.innerHTML = '';
 
             let primaryButton = document.createElement('button');
-            primaryButton.className = 'pyppg-action-button';
+            primaryButton.className = 'gmm-action-button';
 
             if (status.installed && updateInfo) {
                 if (updateInfo.updateAvailable) {
                     primaryButton.textContent = `Update Mod (Steam: ${new Date(updateInfo.steamVersionTime * 1000).toLocaleDateString()})`;
                     primaryButton.classList.add('update');
-                    primaryButton.onclick = () => handleGenericModAction('install', modId, 'Updating mod...', pyppgButtonContainerDiv, INSTALL_REQUEST_TIMEOUT);
+                    primaryButton.onclick = () => handleGenericModAction('install', modId, 'Updating mod...', buttonContainerDiv, INSTALL_REQUEST_TIMEOUT);
                 } else {
                     primaryButton.textContent = status.enabled ? 'Delete Mod' : `Delete Mod (Disabled)`;
                     primaryButton.classList.add('delete');
-                    primaryButton.onclick = () => handleGenericModAction('delete', modId, 'Deleting mod...', pyppgButtonContainerDiv);
+                    primaryButton.onclick = () => handleGenericModAction('delete', modId, 'Deleting mod...', buttonContainerDiv);
                 }
             } else if (status.installed) {
                 primaryButton.textContent = status.enabled ? 'Delete Mod' : `Delete Mod (Disabled)`;
                 primaryButton.classList.add('delete');
-                primaryButton.onclick = () => handleGenericModAction('delete', modId, 'Deleting mod...', pyppgButtonContainerDiv);
+                primaryButton.onclick = () => handleGenericModAction('delete', modId, 'Deleting mod...', buttonContainerDiv);
                 showNotification('Could not check for mod update. Backend or Steam API issue?', 'error');
             }
              else {
-                primaryButton.textContent = 'Install to PyPPG';
+                primaryButton.textContent = 'Install Mod';
                 primaryButton.classList.add('install');
-                primaryButton.onclick = () => handleGenericModAction('install', modId, 'Installing mod...', pyppgButtonContainerDiv, INSTALL_REQUEST_TIMEOUT);
+                primaryButton.onclick = () => handleGenericModAction('install', modId, 'Installing mod...', buttonContainerDiv, INSTALL_REQUEST_TIMEOUT);
             }
-            pyppgButtonContainerDiv.appendChild(primaryButton);
+            buttonContainerDiv.appendChild(primaryButton);
 
             if (status.installed) {
                 let toggleButton = document.createElement('button');
-                toggleButton.className = `pyppg-action-button ${status.enabled ? 'disable' : 'enable'}`;
+                toggleButton.className = `gmm-action-button ${status.enabled ? 'disable' : 'enable'}`;
                 toggleButton.textContent = status.enabled ? 'Disable Mod' : 'Enable Mod';
-                toggleButton.onclick = () => handleToggleModEnabled(modId, !status.enabled, pyppgButtonContainerDiv);
-                pyppgButtonContainerDiv.appendChild(toggleButton);
+                toggleButton.onclick = () => handleToggleModEnabled(modId, !status.enabled, buttonContainerDiv);
+                buttonContainerDiv.appendChild(toggleButton);
             }
 
         } catch (error) {
-            pyppgButtonContainerDiv.innerHTML = '';
+            buttonContainerDiv.innerHTML = '';
             let errorButton = document.createElement('button');
-            errorButton.className = 'pyppg-action-button delete';
+            errorButton.className = 'gmm-action-button delete';
             errorButton.textContent = 'Backend Error';
             errorButton.disabled = true;
-            pyppgButtonContainerDiv.appendChild(errorButton);
+            buttonContainerDiv.appendChild(errorButton);
             showNotification(`Error fetching mod status: ${error}`, 'error');
         }
     }
 
     async function handleGenericModAction(action, modId, loadingMessage, buttonContainer, timeout = DEFAULT_REQUEST_TIMEOUT) {
         showNotification(loadingMessage, 'info', timeout - 1000);
-        buttonContainer.querySelectorAll('.pyppg-action-button').forEach(btn => {btn.disabled = true; btn.classList.add('loading');});
+        buttonContainer.querySelectorAll('.gmm-action-button').forEach(btn => {btn.disabled = true; btn.classList.add('loading');});
         try {
             const response = await backendRequest(`/${action}`, { id: modId }, 'GET', timeout);
             showNotification(response.message || `${action} ${response.success ? 'succeeded' : 'failed'}.`, response.success ? 'success' : 'error');
@@ -171,7 +176,7 @@
     async function handleToggleModEnabled(modId, enableState, buttonContainer) {
         const actionText = enableState ? "Enabling" : "Disabling";
         showNotification(`${actionText} mod...`, 'info', 10000);
-        buttonContainer.querySelectorAll('.pyppg-action-button').forEach(btn => {btn.disabled = true; btn.classList.add('loading');});
+        buttonContainer.querySelectorAll('.gmm-action-button').forEach(btn => {btn.disabled = true; btn.classList.add('loading');});
         try {
             const response = await backendRequest('/toggle_mod_enabled', { id: modId, enable: enableState.toString() });
             showNotification(response.message || `Toggle ${response.success ? 'succeeded' : 'failed'}.`, response.success ? 'success' : 'error');
@@ -183,19 +188,19 @@
     }
 
     function injectModPageButtons() {
-        if (!isCurrentPagePPGWorkshopItem()) return;
+        if (!isSupportedGameWorkshopItem()) return;
         const modId = getModIdFromUrl();
         if (!modId) return;
 
-        let pyppgButtonContainerDiv = document.getElementById(`pyppg-btn-container-${modId}`);
-        if (pyppgButtonContainerDiv) {
-            updateModActionButtons(modId, pyppgButtonContainerDiv);
+        let buttonContainerDiv = document.getElementById(`gmm-btn-container-${modId}`);
+        if (buttonContainerDiv) {
+            updateModActionButtons(modId, buttonContainerDiv);
             return;
         }
 
-        pyppgButtonContainerDiv = document.createElement('div');
-        pyppgButtonContainerDiv.id = `pyppg-btn-container-${modId}`;
-        pyppgButtonContainerDiv.className = 'pyppg-button-container';
+        buttonContainerDiv = document.createElement('div');
+        buttonContainerDiv.id = `gmm-btn-container-${modId}`;
+        buttonContainerDiv.className = 'gmm-button-container';
 
         const gameAreaPurchaseGame = document.querySelector('.game_area_purchase_game');
         let actionsArea = null;
@@ -205,8 +210,8 @@
 
         if (actionsArea) {
             actionsArea.innerHTML = '';
-            actionsArea.appendChild(pyppgButtonContainerDiv);
-            updateModActionButtons(modId, pyppgButtonContainerDiv);
+            actionsArea.appendChild(buttonContainerDiv);
+            updateModActionButtons(modId, buttonContainerDiv);
             return;
         }
 
@@ -226,8 +231,8 @@
         if (originalSubscribeButton && originalSubscribeButton.parentElement) {
             const parentOfSubscribeButton = originalSubscribeButton.parentElement;
             originalSubscribeButton.remove();
-            parentOfSubscribeButton.appendChild(pyppgButtonContainerDiv);
-            updateModActionButtons(modId, pyppgButtonContainerDiv);
+            parentOfSubscribeButton.appendChild(buttonContainerDiv);
+            updateModActionButtons(modId, buttonContainerDiv);
             return;
         }
 
@@ -241,21 +246,23 @@
                  if(gameAreaSteamButton) gameAreaSteamButton.remove();
             }
             let targetForAppend = purchaseAreaBG.querySelector('.block_content.block_content_inner') || purchaseAreaBG;
-            targetForAppend.appendChild(pyppgButtonContainerDiv);
-            updateModActionButtons(modId, pyppgButtonContainerDiv);
+            targetForAppend.appendChild(buttonContainerDiv);
+            updateModActionButtons(modId, buttonContainerDiv);
             return;
         }
-        console.warn('[PyPPG] Could not find suitable DOM element to inject mod buttons reliably.');
+        console.warn('[GMM] Could not find suitable DOM element to inject mod buttons reliably.');
     }
 
     function injectGlobalUpdateButton() {
-         if (!window.location.href.includes("workshop") && !window.location.href.includes("app/1118200")) return;
-         if (document.getElementById('pyppg-global-update-btn')) return;
+         if (!window.location.href.includes("workshop") &&
+             !(window.location.href.includes("app/1118200") || window.location.href.includes("app/108600"))) return;
+
+         if (document.getElementById('gmm-global-update-btn')) return;
 
         const globalButton = document.createElement('button');
-        globalButton.id = 'pyppg-global-update-btn';
-        globalButton.className = 'pyppg-global-button';
-        globalButton.textContent = 'Check All PyPPG Updates';
+        globalButton.id = 'gmm-global-update-btn';
+        globalButton.className = 'gmm-global-button';
+        globalButton.textContent = 'Check All Mod Updates';
         document.body.appendChild(globalButton);
 
         globalButton.onclick = async () => {
@@ -269,14 +276,14 @@
                         let msg = `Updates available for:\n${updates.map(m => `${m.title || m.mod_id}`).join('\n')}`;
                         showNotification(msg, 'info', 15000); alert(msg);
                     } else if (response.data.length === 0) {
-                        showNotification("No PyPPG mods found or mods directory empty.", 'info');
+                        showNotification("No mods found or mods directory empty.", 'info');
                     } else {
-                        showNotification("All PyPPG mods are up-to-date!", 'success');
+                        showNotification("All mods are up-to-date!", 'success');
                     }
                 } else { showNotification(response.message || "Failed to check for updates.", 'error'); }
             } catch (error) { showNotification(`Error checking all updates: ${error}`, 'error');
             } finally {
-                globalButton.textContent = 'Check All PyPPG Updates'; globalButton.classList.remove('loading'); globalButton.disabled = false;
+                globalButton.textContent = 'Check All Mod Updates'; globalButton.classList.remove('loading'); globalButton.disabled = false;
             }
         };
     }
