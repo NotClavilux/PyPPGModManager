@@ -10,7 +10,7 @@
 
 [Download](https://github.com/NotClavilux/PyPPGModManager/releases) • [Features](#what-it-does) • [Installation](#installing) • [Usage](#usage)
 
-![image](https://github.com/user-attachments/assets/a3aff44b-f1fe-4628-bb74-4b1c96165186)
+![image](gmm.gif)
 
 </div>
 
